@@ -2,17 +2,21 @@ package com.analyser.bank.controllers;
 
 import com.analyser.bank.model.BankTransaction;
 import com.analyser.bank.parsers.BankStatementCSVParser;
+import com.analyser.bank.parsers.BankStatementParser;
 import com.analyser.bank.processors.BankStatementProcessor;
+import io.swagger.annotations.ApiParam;
+import org.apache.commons.io.FileUtils;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Component;
-import org.springframework.validation.BindingResult;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
+import org.springframework.web.bind.annotation.RequestPart;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.File;
 import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.time.Month;
 import java.util.List;
 
@@ -20,25 +24,7 @@ import java.util.List;
 @Component
 public class BankStatementAnalyserController {
 
-    private static final String RESOURCES = "src/main/resources/";
-
-    private static final BankStatementCSVParser bankStatementParser = new BankStatementCSVParser();
-
-    @RequestMapping(value= "/upload", method= RequestMethod.POST, headers = "Accept=application/json, application/xml")
-    public ResponseEntity<?> upload(@RequestBody String file, BindingResult result){
-        return ResponseEntity.ok().body("");
-    }
-
-    public static void main(final String... args) throws IOException {
-        final String fileName = args[0];
-        final Path path = Paths.get(RESOURCES + fileName);
-        final List<String> lines = Files.readAllLines(path);
-
-        final List<BankTransaction> bankTransactions = bankStatementParser.parseLinesFromCSV(lines);
-        final BankStatementProcessor bankStatementProcessor = new BankStatementProcessor(bankTransactions);
-
-        collectSummary(bankStatementProcessor);
-    }
+    private static final BankStatementParser bankStatementParser = new BankStatementCSVParser();
 
     private static void collectSummary(final BankStatementProcessor bankStatementProcessor) {
         System.out.println("The total for all transactions is "
@@ -52,5 +38,29 @@ public class BankStatementAnalyserController {
 
         System.out.println("The total salary received is "
                 + bankStatementProcessor.calculateTotalForCategory("Salary"));
+    }
+
+    @RequestMapping(value = "/upload", method = RequestMethod.POST,
+            headers = "Accept=application/json, application/xml, multipart/form-data")
+    public ResponseEntity<?> upload(
+            @ApiParam(name = "file", value = "Select the file to Upload", required = true)
+            @RequestPart("file") MultipartFile file) {
+        try {
+            File testFile = new File("test");
+            FileUtils.writeByteArrayToFile(testFile, file.getBytes());
+            List<String> lines = FileUtils.readLines(testFile);
+            lines.forEach(line -> System.out.println(line));
+        } catch (IOException e) {
+            e.printStackTrace();
+            return new ResponseEntity<String>("Failed", HttpStatus.INTERNAL_SERVER_ERROR);
+        }
+        return new ResponseEntity<String>("Done", HttpStatus.OK);
+    }
+
+    public void processFile(List<String> lines) {
+        final List<BankTransaction> bankTransactions = bankStatementParser.parseLines(lines);
+        final BankStatementProcessor bankStatementProcessor = new BankStatementProcessor(bankTransactions);
+
+        collectSummary(bankStatementProcessor);
     }
 }
